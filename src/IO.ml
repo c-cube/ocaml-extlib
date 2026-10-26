@@ -34,7 +34,7 @@ module Buf_in =struct
     mutable refill : unit -> unit;
   }
 
-  let consume i n =
+  let[@inline] consume i n =
     if n > i.len then invalid_arg "Buf_in.consume";
     i.pos <- i.pos + n;
     i.len <- i.len - n
@@ -524,8 +524,8 @@ let find_char_in_buf (input:Buf_in.t) (c:char) : int =
 
 let read_line_buf (input:Buf_in.t) : string =
   let cr = ref false in (* last char is ['\r'] *)
-  let skip_last_if_cr len = if !cr && len>0 then len-1 else len in
-  let ends_in_cr (input:Buf_in.t) len : bool =
+  let[@inline] skip_last_if_cr len = if !cr && len>0 then len-1 else len in
+  let[@inline] ends_in_cr (input:Buf_in.t) len : bool =
     len > 0 && Bytes.unsafe_get input.buf (input.pos + len - 1) = '\r'
   in
   let rec loop buf = match find_char_in_buf input '\n' with
@@ -549,7 +549,7 @@ let read_line_buf (input:Buf_in.t) : string =
       Buffer.contents buf
   in
 
-  if input.len = 0 then input.refill ();
+  Buf_in.refill_if_empty input;
   match find_char_in_buf input '\n' with
   | -1 -> loop (Buffer.create 8)
   | i ->
