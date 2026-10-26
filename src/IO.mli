@@ -149,6 +149,37 @@ val create_in :
   input:(Bytes.t -> int -> int -> int) -> close:(unit -> unit) -> input
 (** Fully create an input by giving all the needed functions. *)
 
+
+(** @since 1.9 *)
+module Buf_in : sig
+  type t = {
+    mutable buf: bytes;
+    mutable pos: int;
+    mutable len: int;
+    mutable refill : unit -> unit;
+      (** When len=0, refill buffer or raise {!No_more_input}. Writes
+          into [buf], sets [pos<-0], and [len<-num_of_bytes_refilled]. *)
+  }
+  (** View of {!input} with exposed buffer, only for some streams. Providing
+      [as_buffered] may accelerate some operations such as {!read_line}.
+
+      Invariants: [Bytes.sub i.buf i.pos i.len] is a valid operation.
+        Consuming [n] characters means adding [n] to [pos] {b and}
+        subtracting [n] from [len]. The buffer is empty iff [len=0]. *)
+
+  val consume : t -> int -> unit
+  (** [consume buf n] consumes [n] bytes from the slice.
+      Precondition: [buf.len >= n] *)
+end
+
+val create_in_full :
+  read:(unit -> char) ->
+  input:(Bytes.t -> int -> int -> int) -> close:(unit -> unit) ->
+  ?as_buffered:(unit -> Buf_in.t option) ->
+  unit -> input
+(** @param as_buffered offers a view of the internal buffer, if available.
+    @since 1.9 *)
+
 val create_out :
   write:(char -> unit) ->
   output:(Bytes.t -> int -> int -> int) ->
