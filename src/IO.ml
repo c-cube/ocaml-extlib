@@ -38,6 +38,9 @@ module Buf_in =struct
     if n > i.len then invalid_arg "Buf_in.consume";
     i.pos <- i.pos + n;
     i.len <- i.len - n
+
+  let[@inline] refill_if_empty i =
+    if i.len = 0 then i.refill()
 end
 
 type input = {

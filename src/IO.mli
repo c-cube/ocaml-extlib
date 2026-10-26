@@ -170,6 +170,10 @@ module Buf_in : sig
   val consume : t -> int -> unit
   (** [consume buf n] consumes [n] bytes from the slice.
       Precondition: [buf.len >= n] *)
+
+  val refill_if_empty : t -> unit
+  (** Refill if buffer is empty, does nothing otherwise.
+      @raise No_more_input if refilling fails for lack of input *)
 end
 
 val create_in_full :
