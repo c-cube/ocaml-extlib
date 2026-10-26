@@ -47,7 +47,7 @@ type input = {
   mutable in_read : unit -> char;
   mutable in_input : Bytes.t -> int -> int -> int;
   mutable in_close : unit -> unit;
-  as_buffered: unit -> Buf_in.t option;
+  mutable as_buffered: unit -> Buf_in.t option;
 }
 
 type 'a output = {
@@ -160,7 +160,8 @@ let close_in i =
   i.in_close();
   i.in_read <- f;
   i.in_input <- f;
-  i.in_close <- f
+  i.in_close <- f;
+  i.as_buffered <- (fun () -> None)
 
 let write o x = o.out_write x
 
