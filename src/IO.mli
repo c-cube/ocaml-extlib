@@ -158,7 +158,8 @@ module Buf_in : sig
     mutable len: int;
     mutable refill : unit -> unit;
       (** When len=0, refill buffer or raise {!No_more_input}. Writes
-          into [buf], sets [pos<-0], and [len<-num_of_bytes_refilled]. *)
+          into [buf], sets [pos<-0], and [len<-num_of_bytes_refilled].
+          When len>0 it may do nothing, or read more data. *)
   }
   (** View of {!input} with exposed buffer, only for some streams. Providing
       [as_buffered] may accelerate some operations such as {!read_line}.
@@ -171,9 +172,11 @@ module Buf_in : sig
       - consuming [n] characters means adding [n] to [pos] {b and}
         subtracting [n] from [len]; use {!consume}. The buffer is empty iff
         [len=0].
-      - [refill] is only called when [len=0]. It either makes [len>0]
+      - [refill] must act only if [len=0]: it then either makes [len>0]
         (setting [pos] and [len] together), or raises {!No_more_input}, and
-        once it has raised it must keep raising (EOF is sticky).
+        once it has raised it must keep raising (EOF is sticky). If [len>0]
+        it is allowed to do nothing (or to read more data, as long as the
+        slice invariant above still holds).
       - [buf] is mutable: do not cache it (or [pos]) across a call to
         [refill].
       - the view is shared with the owning {!input}: [read]/[input] on that
@@ -186,10 +189,13 @@ module Buf_in : sig
   (** [create buf ~fill] is an initially empty view over [buf].
 
       This is an easier way to respect the invariants of {!t}.
-      When [fill buf] is called it must write at least 1 byte and at most
-      [Bytes.length buf] into [buf], starting at offset 0, and return
+      When [fill buf] is called it must try to write at least 1 byte and at
+      most [Bytes.length buf] into [buf], starting at offset 0, and return
       how many bytes were written. Returning 0 or raising {!No_more_input}
-      signify that the end of stream was reached. *)
+      signify that the end of stream was reached. [fill] is only called
+      when the view is empty.
+      @raise Failure (from [refill]) if [fill] returns a count that is
+      negative or larger than [Bytes.length buf]. *)
 
   val consume : t -> int -> unit
   (** [consume buf n] consumes [n] bytes from the slice.

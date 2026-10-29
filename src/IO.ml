@@ -51,13 +51,17 @@ module Buf_in =struct
       refill=(fun () -> raise No_more_input);
     } in
     bufin.refill <- begin fun () ->
-      if !eof then raise No_more_input;
-      if bufin.len > 0 then invalid_arg "called refill on non-empty Buf_in.t";
-      let n = fill bufin.buf in
-      if n = 0 then (eof := true; raise No_more_input)
-      else if n < 0 || n > Bytes.length bufin.buf then failwith "Buf_in: fill returned an invalid slice";
-      bufin.pos <- 0;
-      bufin.len <- n;
+      if bufin.len = 0 then begin
+        if !eof then raise No_more_input;
+        let n =
+          try fill bufin.buf
+          with No_more_input -> eof := true; raise No_more_input
+        in
+        if n = 0 then (eof := true; raise No_more_input)
+        else if n < 0 || n > Bytes.length bufin.buf then failwith "Buf_in: fill returned an invalid slice";
+        bufin.pos <- 0;
+        bufin.len <- n;
+      end
     end;
     bufin
 end

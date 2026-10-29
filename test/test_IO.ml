@@ -324,6 +324,21 @@ let test_buf_in_create () =
     assert (try IO.Buf_in.refill_if_empty b; false with IO.No_more_input -> true)
   done;
   assert (!calls = 2);  (* EOF is sticky: fill not called again *)
+  (* direct [refill] on a non-empty view is a no-op *)
+  let c = ref 0 in
+  let b2 = IO.Buf_in.create (Bytes.create 4) ~fill:(fun buf ->
+    incr c; Bytes.blit_string "ab" 0 buf 0 2; 2) in
+  b2.IO.Buf_in.refill ();
+  b2.IO.Buf_in.refill ();
+  assert (!c = 1 && b2.IO.Buf_in.len = 2);
+  (* [fill] raising No_more_input is sticky too *)
+  let d = ref 0 in
+  let b3 = IO.Buf_in.create (Bytes.create 4)
+    ~fill:(fun _ -> incr d; raise IO.No_more_input) in
+  for _=1 to 3 do
+    assert (try b3.IO.Buf_in.refill (); false with IO.No_more_input -> true)
+  done;
+  assert (!d = 1);
   let bad = IO.Buf_in.create (Bytes.create 2) ~fill:(fun _ -> 3) in
   assert (try bad.IO.Buf_in.refill (); false with Failure _ -> true)
 
