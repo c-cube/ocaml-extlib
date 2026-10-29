@@ -41,6 +41,25 @@ module Buf_in =struct
 
   let[@inline] refill_if_empty i =
     if i.len = 0 then i.refill()
+
+  let create buf ~fill : t =
+    let eof = ref false in
+    let bufin = {
+      buf;
+      pos=0;
+      len=0;
+      refill=(fun () -> raise No_more_input);
+    } in
+    bufin.refill <- begin fun () ->
+      if !eof then raise No_more_input;
+      if bufin.len > 0 then invalid_arg "called refill on non-empty Buf_in.t";
+      let n = fill bufin.buf in
+      if n = 0 then (eof := true; raise No_more_input)
+      else if n < 0 || n > Bytes.length bufin.buf then failwith "Buf_in: fill returned an invalid slice";
+      bufin.pos <- 0;
+      bufin.len <- n;
+    end;
+    bufin
 end
 
 type input = {

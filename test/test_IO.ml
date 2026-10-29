@@ -147,20 +147,12 @@ let unbuffered_input s =
 let chunked_input ~chunk s =
   let n = String.length s in
   let src = ref 0 in
-  let buf_in = {
-    IO.Buf_in.buf = Bytes.make (chunk + 5) '#';
-    pos = 0; len = 0;
-    refill = (fun () -> ());
-  } in
-  buf_in.refill <- (fun () ->
-    if buf_in.len > 0 then invalid_arg "refill called on non-empty buffer";
-    if !src >= n then raise IO.No_more_input;
+  let buf_in = IO.Buf_in.create (Bytes.make (chunk + 5) '#') ~fill:(fun buf ->
     let k = min chunk (n - !src) in
-    Bytes.fill buf_in.buf 0 (Bytes.length buf_in.buf) '#';
-    Bytes.blit_string s !src buf_in.buf 0 k;
+    Bytes.fill buf 0 (Bytes.length buf) '#';
+    Bytes.blit_string s !src buf 0 k;
     src := !src + k;
-    buf_in.pos <- 0;
-    buf_in.len <- k);
+    k) in
   let read () =
     if buf_in.len = 0 then buf_in.refill ();
     let c = Bytes.get buf_in.buf buf_in.pos in
@@ -317,6 +309,24 @@ let test_input_bytes_read_sync () =
   assert (IO.read inp = 'a');
   assert (IO.read_all inp = "bcd")
 
+let test_buf_in_create () =
+  let calls = ref 0 in
+  let b = IO.Buf_in.create (Bytes.create 4) ~fill:(fun buf ->
+    incr calls;
+    if !calls = 1 then (Bytes.blit_string "xyz" 0 buf 0 3; 3) else 0) in
+  assert (b.IO.Buf_in.len = 0);
+  IO.Buf_in.refill_if_empty b;
+  assert (b.IO.Buf_in.len = 3 && b.IO.Buf_in.pos = 0);
+  IO.Buf_in.refill_if_empty b;  (* non-empty: no call *)
+  assert (!calls = 1);
+  IO.Buf_in.consume b 3;
+  for _=1 to 3 do
+    assert (try IO.Buf_in.refill_if_empty b; false with IO.No_more_input -> true)
+  done;
+  assert (!calls = 2);  (* EOF is sticky: fill not called again *)
+  let bad = IO.Buf_in.create (Bytes.create 2) ~fill:(fun _ -> 3) in
+  assert (try bad.IO.Buf_in.refill (); false with Failure _ -> true)
+
 let register_read_line () =
   let r = Util.register1 "IO" in
   r "read_line/unbuffered" test_read_line_unbuffered;
@@ -334,7 +344,8 @@ let register_read_line () =
       "chunked1", chunked_input ~chunk:1;
       "chunked3", chunked_input ~chunk:3;
       "offset", offset_input ];
-  r "input_bytes/read_sync" test_input_bytes_read_sync
+  r "input_bytes/read_sync" test_input_bytes_read_sync;
+  r "Buf_in/create" test_buf_in_create
 
 let register () =
   register_read_line ();

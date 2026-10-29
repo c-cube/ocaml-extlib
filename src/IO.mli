@@ -163,9 +163,33 @@ module Buf_in : sig
   (** View of {!input} with exposed buffer, only for some streams. Providing
       [as_buffered] may accelerate some operations such as {!read_line}.
 
-      Invariants: [Bytes.sub i.buf i.pos i.len] is a valid operation.
-        Consuming [n] characters means adding [n] to [pos] {b and}
-        subtracting [n] from [len]. The buffer is empty iff [len=0]. *)
+      Invariants (for implementors of [refill] and of the stream that owns
+      the view):
+      - the unread data is exactly [buf[pos .. pos+len)], so
+        [Bytes.sub i.buf i.pos i.len] is a valid operation. Bytes outside
+        this slice are meaningless.
+      - consuming [n] characters means adding [n] to [pos] {b and}
+        subtracting [n] from [len]; use {!consume}. The buffer is empty iff
+        [len=0].
+      - [refill] is only called when [len=0]. It either makes [len>0]
+        (setting [pos] and [len] together), or raises {!No_more_input}, and
+        once it has raised it must keep raising (EOF is sticky).
+      - [buf] is mutable: do not cache it (or [pos]) across a call to
+        [refill].
+      - the view is shared with the owning {!input}: [read]/[input] on that
+        input and operations on the view consume from the same data.
+
+      Use {!create} rather than building the record by hand, as it
+      maintains these invariants for you. *)
+
+  val create : bytes -> fill:(bytes -> int) -> t
+  (** [create buf ~fill] is an initially empty view over [buf].
+
+      This is an easier way to respect the invariants of {!t}.
+      When [fill buf] is called it must write at least 1 byte and at most
+      [Bytes.length buf] into [buf], starting at offset 0, and return
+      how many bytes were written. Returning 0 or raising {!No_more_input}
+      signify that the end of stream was reached. *)
 
   val consume : t -> int -> unit
   (** [consume buf n] consumes [n] bytes from the slice.
